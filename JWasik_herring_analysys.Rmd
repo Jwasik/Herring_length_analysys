@@ -1,12 +1,16 @@
 ---
 title: "Analiza śledzi"
 author: "Jędrzej Wasik"
-date: "2022-11-28"
+date: "`r Sys.Date()`"
 output: 
   html_document:
     toc: true
     toc_float: true
 ---
+# Strzeszczenie
+
+Poniższa praca przedstawia analizę zbioru danych śledzie. Wynikiem końcowym jest wniosek przedstawiający domniemaną przyczynę zmniejszenia długości śledzi. W procesie przetwarzania danych przeanalizowano zbiór wejściowy i wyczyszczono dane. Została także przedstawiona macierz korelacji zmiennych, oraz interaktywny wykres zawartości planktonu w wodzie zależnie od aktualnego miesiąca w roku.
+
 # Analiza podstawowa
 ## Inicjalizacja
 
