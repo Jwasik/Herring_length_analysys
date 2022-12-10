@@ -1,0 +1,206 @@
+---
+title: "Analiza śledzi"
+author: "Jędrzej Wasik"
+date: "2022-11-28"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+# Analiza podstawowa
+## Inicjalizacja
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(gganimate)
+library(plotly)
+library(corrplot)
+library(caret)
+
+set.seed(23)
+theme_set(theme_bw())
+
+```
+
+## Załadowanie danych i analiza
+
+```{r}
+data <- read.csv("sledzie.csv")
+summary(data)
+
+```
+Zauważamy że kolumny, które powinny być typu numerycznego są ciągiem znaków.
+
+## Próbka danych
+
+```{r}
+head(data)
+```
+Zauważamy że miejscami pojawia się znak `?` zamiast danych. W następnym kroku będzimy dążyli do zamiany go na `NA`, oraz uzupełnienie średnią kolumny.
+
+
+## Czyszczenie danych
+
+```{r get_rid_of_na, warning=FALSE}
+#zamień wszystkie kolumny na liczbę rzeczywistą
+data2 <- as.data.frame(lapply(data, as.numeric))
+#zamień wszystkie wartości NA na średnią dla kolumny
+data2 <- data2 %>% mutate_if(is.numeric, ~replace_na(.,mean(., na.rm = TRUE)))
+#zamień wszystkie kolumny będące wcześniej liczbą całkowitą na liczby całkowite
+data2 <- transform(data2, recr = as.integer(recr), xmonth = as.integer(xmonth))
+#wyrzuć kolumnę id
+data2 <- subset(data2, select = -c(X))
+
+colSums(is.na(data2))
+```
+
+## Podsumowanie zbioru po czyszczeniu
+```{r}
+summary(data2)
+```
+
+## Korelacje między zmiennymi
+```{r}
+corelation <- cor(data2)
+corrplot(corelation,method="color", order="hclust", sig.level = 0.01)
+```
+
+## Zagęszczenie planktonu w poszczególnych miesiącach
+
+
+```{r}
+#na podstawie: https://stackoverflow.com/questions/68471610/r-plotly-dropdown-variable-selection-with-color
+
+plot_ly(data = data2, x = ~factor(xmonth), y = ~cfin1, type ="box", xaxis = list(title = "Miesiąc")) %>%
+  layout(
+    annotations = list(
+      list(
+        text = "<b>Rodzaj planktonu: </b>", x=0.04, y=1.13, xref='paper', yref='paper',xanchor = "left", showarrow=FALSE
+      )
+    ),
+    xaxis = list(title = 'Miesiąc'),
+    updatemenus = list(
+      list(
+        type = "list",
+        x = 0.25,
+        xanchor = "left",
+        y = 1.15,
+        buttons = list(
+          list(
+            method = "update",
+            args = list(list(y = list(data2$cfin1)),
+                        list(yaxis = list(title = "cfin1"))
+                        ),
+            label = "cfin1"
+              ),
+          list(
+            method = "update",
+            args = list(list(y =list(data2$cfin2)),
+                        list(yaxis = list(title = "cfin2"))
+                        ),
+            label = "cfin2"
+              ),
+          
+          list(
+            method = "update",
+            args = list(list(y = list(data2$chel1)),
+                        list(yaxis = list(title = "chel1"))
+                        ),
+            label = "chel1"
+              ),
+          
+          list(
+            method = "update",
+            args = list(list(y = list(data2$chel2)),
+                        list(yaxis = list(title = "chel2"))
+                        ),
+            label = "chel2"
+              ),
+          
+          list(
+            method = "update",
+            args = list(list(y = list(data2$lcop1)),
+                        list(yaxis = list(title = "lcop1"))
+                        ),
+            label = "lcop1"
+              ),
+          
+          list(
+            method = "update",
+            args = list(list(y = list(data2$lcop2)),
+                        list(yaxis = list(title = "lcop2"))
+                        ),
+            label = "lcop2"
+              )
+        )
+      )
+    )
+  )
+```
+
+# Przewidywanie rozmiaru śledzia
+
+## Podział zbioru na 2 części
+```{r}
+inTraining <- 
+    createDataPartition(
+        y = data2$length,
+        p = .80,
+        list = FALSE)
+
+training <- data2[ inTraining,]
+testing  <- data2[-inTraining,]
+```
+
+## Wybór parametrów algorytmu
+metoda `repeatedcv` (powtórna walidacja krzyżowa) dzieli zbiór treningowy na zbiór treningowy i walidacyjny.
+
+```{r}
+ctrl <- trainControl(
+    method = "repeatedcv",
+    classProbs = TRUE,
+    number = 2,
+    repeats = 5)
+```
+## Utworzenie modelu
+
+```{r fit, cache=TRUE}
+fit <- train(length ~ .,
+             data = training,
+             method = "rf",
+             metric = 'RMSE',
+             trControl = ctrl,
+             ntree = 15)
+
+fit
+```
+Wybrano drzewo mtry=2, z RMSE = 1.16 i R^2 = 0.501. Są to wartości mocno nieidealne, ale w tym momencie najlepsze.
+
+## Predykcja
+
+```{r}
+pred <- predict(fit, testing)
+postResample(pred = pred, obs = testing$length)
+```
+
+## Powód zmniejszania rozmiaru śledzi
+
+Używamy metody `varImp` do zbadania istotności zmiennych.
+
+```{r}
+imp <- varImp(fit)
+plot(imp)
+```
+
+Długość śledzi zmniejsza się głównie przez temperaturę przy powierzchni wody, oraz rozmiary połowów. Najmniej na długość śledzia wpływa miesiąc połowu, ilość pozostawionych śledzi przy połowie i zagęszczenie planktonu.
+
+
+
+
+
+
+
+
